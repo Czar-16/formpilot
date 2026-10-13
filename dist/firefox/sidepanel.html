@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FormPilot</title>
+    <link rel="icon" href="icons/32.png" />
+    <link rel="stylesheet" href="sidepanel.css" />
+    <script src="browser-api.js"></script>
+    <script type="module" src="theme.js"></script>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="brand-mark" id="logo"></span>
+        <h1>FormPilot</h1>
+      </div>
+      <div class="header-actions">
+        <button
+          id="profileMenu"
+          class="pill"
+          popovertarget="profilePopover"
+          aria-label="Profiles"
+        >
+          <span id="profileName"></span><span id="chevron"></span></button
+        ><button
+          id="themeToggle"
+          class="settings theme-toggle"
+          type="button"
+          aria-label="Switch to dark mode"
+          title="Switch to dark mode"
+        ></button
+        ><button
+          id="settings"
+          class="settings"
+          popovertarget="settingsPopover"
+          aria-label="Settings"
+        ></button>
+      </div>
+    </header>
+    <div class="search-wrap">
+      <label class="search-box"
+        ><span id="searchIcon"></span
+        ><input
+          id="search"
+          type="search"
+          placeholder="Search saved items"
+          aria-label="Search saved items"
+      /></label>
+    </div>
+    <nav id="chips" aria-label="Filter by category"></nav>
+    <div class="target-box">
+      <span id="targetIcon" class="target-tile"></span>
+      <div class="target-info">
+        <div class="hint">Arrow will fill into</div>
+        <div id="targetName">Click a field on the page</div>
+      </div>
+      <span id="targetStatus" class="target-status">No field selected</span>
+    </div>
+    <main id="categories" aria-label="Saved items"></main>
+    <footer>
+      <span id="lockIcon"></span>All data is stored only on this device
+    </footer>
+    <div id="profilePopover" class="popover" popover aria-label="Profiles">
+      <div id="profileList"></div>
+      <button id="newProfile">Add profile</button
+      ><button id="renameProfile">Rename profile</button
+      ><button id="duplicateProfile">Duplicate profile</button
+      ><button id="deleteProfile">Delete profile</button
+      ><button id="manageProfiles" hidden>Manage profiles</button>
+    </div>
+    <div id="settingsPopover" class="popover" popover aria-label="Settings">
+      <label
+        >Theme<select id="theme" aria-label="Theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select></label
+      >
+      <button id="addItem">Add item</button
+      ><button id="addProject">Add project</button
+      ><button id="addCategory">Add category</button
+      ><button id="manageCategories">Manage categories</button>
+      <button id="export">Export JSON</button
+      ><button id="import">Import JSON</button
+      ><button id="reset">Start fresh…</button>
+    </div>
+    <input hidden id="importFile" type="file" accept="application/json,.json" />
+    <dialog id="editor" aria-labelledby="dialogTitle">
+      <form id="editForm">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <h2 id="dialogTitle"></h2>
+        <div id="dialogFields"></div>
+        <div id="editorActions" class="sheet-actions"></div>
+        <div class="sheet-actions">
+          <button type="button" id="cancel">Cancel</button
+          ><button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="resetDialog" aria-labelledby="resetTitle">
+      <h2 id="resetTitle">Start fresh with FormPilot</h2>
+      <p>
+        Replace all saved profiles and files with the new fourteen empty items.
+        Export a backup to keep your current data.
+      </p>
+      <div class="sheet-actions">
+        <button id="resetExport">Export backup</button
+        ><button id="resetCancel">Cancel</button
+        ><button id="resetConfirm" class="primary">Start fresh</button>
+      </div>
+    </dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,77 @@
+{
+  "manifest_version": 3,
+  "name": "FormPilot",
+  "version": "2.1.0",
+  "description": "Keep profiles and files on your device and fill forms from the side panel.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "clipboardWrite"
+  ],
+  "background": {
+    "scripts": [
+      "browser-api.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "Open FormPilot",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "commands": {
+    "open-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Open FormPilot"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "browser-api.js",
+        "content.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "sidebar_action": {
+    "default_title": "FormPilot",
+    "default_panel": "sidepanel.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "formpilot@extensions.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  }
+}
