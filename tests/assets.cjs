@@ -71,7 +71,7 @@ console.log(
 );
 
 const firefox = JSON.parse(read("manifest.firefox.json"));
-assert.equal(firefox.version, "2.1.0");
+assert.equal(firefox.version, "2.2.0");
 assert.deepEqual(firefox.permissions, ["storage", "activeTab", "clipboardWrite"]);
 assert.deepEqual(firefox.host_permissions, ["<all_urls>"]);
 assert.equal(firefox.background.service_worker, undefined);

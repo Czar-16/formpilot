@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Automatic filling fixture</title>
+  </head>
+  <body>
+    <form id="application">
+      <label>First name<input id="first" autocomplete="given-name" /></label>
+      <label>Last name<input id="last" autocomplete="family-name" /></label>
+      <label>Full name<input id="full" autocomplete="name" /></label>
+      <label
+        >Email<input
+          id="email"
+          autocomplete="email"
+          value="existing@example.org"
+      /></label>
+      <label>Phone<input id="phone" autocomplete="tel" value="   " /></label>
+      <label
+        >Country<select id="country" autocomplete="country-name">
+          <option value="">Choose</option>
+          <option value="UK">United Kingdom</option>
+        </select></label
+      >
+      <label
+        >Country<select id="preserved" autocomplete="country-name">
+          <option value="US">United States</option>
+          <option value="UK">United Kingdom</option>
+        </select></label
+      >
+      <label
+        >City<select id="failure" autocomplete="address-level2">
+          <option value="">Choose</option>
+          <option>Paris</option>
+        </select></label
+      >
+      <label>Resume<input id="resume" type="file" accept=".txt" /></label>
+      <label>CV<input id="rejected" type="file" accept=".pdf" /></label>
+      <label>Upload attachment<input id="unrelated" type="file" /></label>
+      <label>First name<input id="hidden" hidden /></label>
+      <label>First name<input id="disabled" disabled /></label>
+      <label>First name<input id="readonly" readonly /></label>
+      <label
+        >Password<input type="password" autocomplete="given-name" id="password"
+      /></label>
+      <label>First name<input id="changed" autocomplete="given-name" /></label>
+      <label><input type="checkbox" id="checkbox" />First name</label>
+      <label><input type="radio" id="radio" />First name</label>
+      <div
+        contenteditable="true"
+        id="form-editable"
+        aria-label="First name"
+      ></div>
+      <button>Submit</button>
+    </form>
+    <form id="other">
+      <label
+        >First name<input id="other-first" autocomplete="given-name"
+      /></label>
+    </form>
+    <div id="shadow"></div>
+    <div contenteditable="true" aria-label="First name" id="editable">
+      <span contenteditable="true" id="nested"></span>
+    </div>
+    <iframe src="bulk-frame.html"></iframe
+    ><iframe src="http://127.0.0.1:8765/tests/bulk-frame.html"></iframe>
+    <script>
+      document
+        .querySelector("#shadow")
+        .attachShadow({ mode: "open" }).innerHTML =
+        '<label>First name<input id="shadow-first" autocomplete="given-name"></label>';
+      window.submits = 0;
+      document.addEventListener("submit", (e) => {
+        e.preventDefault();
+        window.submits++;
+      });
+    </script>
+  </body>
+</html>

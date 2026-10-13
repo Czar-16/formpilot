@@ -12,7 +12,7 @@ const background = fs.readFileSync(require('node:path').join(__dirname,'../backg
       runtime:{onMessage:event('message'),sendMessage:async()=>{}},
       action:{onClicked:event('toolbar')}, commands:{onCommand:event('command')},
       tabs:{onRemoved:event('removed'),onUpdated:event('updated')},
-      storage:{session:{set:async value=>Object.assign(storage,value),get:async key=>({[key]:storage[key]}),remove:async key=>{delete storage[key]}}},
+      storage:{session:{set:async value=>Object.assign(storage,value),get:async key=>({[key]:storage[key]}),remove:async key=>{for(const k of Array.isArray(key)?key:[key])delete storage[k]}}},
       ...(firefox?{sidebarAction:{open(){assert.ok(inGesture,'sidebar open must retain user gesture');calls.push('sidebar');return Promise.resolve()}}}:{sidePanel:{setPanelBehavior:async()=>calls.push('behavior'),open:async v=>calls.push(v.windowId)}})
     };
     const context=vm.createContext({console,...firefox?{browser:api,chrome:{}}:{chrome:api}});
@@ -29,8 +29,18 @@ const background = fs.readFileSync(require('node:path').join(__dirname,'../backg
     assert.equal((await message({kind:'get-owner',tabId:10})).owner.token,'doc-two');
     await message({kind:'focus-owner',token:'other-tab',descriptor:{}},{tab:{id:11},frameId:0,documentId:'chrome-document'});
     assert.equal(storage['owner:11'].documentId,'chrome-document');
+    await message({kind:'register-document',token:'old'},{tab:{id:10},frameId:4});
+    await message({kind:'register-document',token:'new'},{tab:{id:10},frameId:4,documentId:'new-document'});
+    await message({kind:'unregister-document',token:'old'},{tab:{id:10},frameId:4});
+    assert.equal((await message({kind:'get-documents',tabId:10},{tab:{id:99}})).documents[0].token,'new');
+    assert.equal((await message({kind:'get-documents',tabId:10})).documents[0].documentId,'new-document');
+    // Recreating the background preserves registrations through session storage.
+    const restarted=vm.createContext({console,formpilotAPI:api});
+    vm.runInContext(background,restarted);
+    assert.equal((await message({kind:'get-documents',tabId:10})).documents[0].token,'new');
     listeners.updated(10,{status:'loading'});
     assert.equal((await message({kind:'get-owner',tabId:10})).owner,undefined);
+    assert.equal((await message({kind:'get-documents',tabId:10})).documents.length,0);
     assert.equal((await message({kind:'get-owner',tabId:11})).owner.token,'other-tab');
     listeners.removed(11);assert.equal((await message({kind:'get-owner',tabId:11})).owner,undefined);
   }

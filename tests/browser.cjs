@@ -52,7 +52,7 @@ const root = path.resolve(__dirname, "..");
     });
     await panel.goto(`chrome-extension://${id}/sidepanel.html`);
     await panel.waitForSelector(".row");
-    assert.equal(await panel.locator(".row").count(), 14);
+    assert.equal(await panel.locator(".row").count(), 15);
     assert.equal(await panel.locator("#categories > section").count(), 8);
     const saved = () =>
       panel.evaluate(
@@ -74,12 +74,12 @@ const root = path.resolve(__dirname, "..");
       await saveDialog();
     }
     await panel
-      .getByRole("button", { name: "Edit Full name", exact: true })
+      .getByRole("button", { name: "Edit First name", exact: true })
       .click();
     await panel.getByLabel("Value", { exact: true }).fill("Ada Lovelace");
     await saveDialog();
     assert.equal(
-      (await saved()).profiles[0].items.find((i) => i.label === "Full name")
+      (await saved()).profiles[0].items.find((i) => i.label === "First name")
         .value,
       "Ada Lovelace",
     );
@@ -90,17 +90,17 @@ const root = path.resolve(__dirname, "..");
     await panel.getByRole("button", { name: "All", exact: true }).click();
     await panel.locator("#search").fill("");
     await panel
-      .getByRole("button", { name: "Copy Full name", exact: true })
+      .getByRole("button", { name: "Copy First name", exact: true })
       .click();
     await panel.waitForFunction(
       () =>
         document
-          .querySelector('[aria-label="Copy Full name"] path')
+          .querySelector('[aria-label="Copy First name"] path')
           ?.getAttribute("d") === "M5 12.5l4.5 4.5L19 7.5",
     );
     await panel.waitForTimeout(1250);
     assert.match(
-      await panel.getByRole("button", { name: "Copy Full name" }).innerHTML(),
+      await panel.getByRole("button", { name: "Copy First name" }).innerHTML(),
       /rect/,
     );
     await panel.waitForTimeout(450);
@@ -253,7 +253,7 @@ const root = path.resolve(__dirname, "..");
     );
     await manage("new", "Another");
     assert.equal((await saved()).profiles.length, 3);
-    assert.equal((await saved()).profiles.at(-1).items.length, 14);
+    assert.equal((await saved()).profiles.at(-1).items.length, 15);
     await manage("rename", "Renamed");
     assert.equal((await saved()).profiles.at(-1).name, "Renamed");
     panel.once("dialog", (d) => d.accept());
@@ -352,7 +352,7 @@ const root = path.resolve(__dirname, "..");
     await panel.locator("#resetDialog[open]").waitFor();
     await clickHidden("resetCancel");
     assert.equal(
-      (await saved()).profiles[0].items.find((i) => i.label === "Full name")
+      (await saved()).profiles[0].items.find((i) => i.label === "First name")
         .value,
       "Ada Lovelace",
     );
@@ -366,10 +366,10 @@ const root = path.resolve(__dirname, "..");
     await clickHidden("resetConfirm");
     await panel.waitForTimeout(150);
     assert.equal((await saved()).profiles.length, 1);
-    assert.equal((await saved()).profiles[0].items.length, 14);
+    assert.equal((await saved()).profiles[0].items.length, 15);
     for (const [label, value] of [
       ["GitHub", "https://github.com/ada"],
-      ["Full name", "Ada Lovelace"],
+      ["First name", "Ada Lovelace"],
     ]) {
       await panel
         .getByRole("button", { name: "Edit " + label, exact: true })
@@ -589,11 +589,11 @@ const root = path.resolve(__dirname, "..");
     await panel.waitForFunction(
       () =>
         document.querySelector(".row.target .label")?.textContent ===
-        "Full name",
+        "First name",
     );
     await panel.evaluate(() =>
       document
-        .querySelector('[aria-label="Fill Full name into the page"]')
+        .querySelector('[aria-label="Fill First name into the page"]')
         .click(),
     );
     await panel.waitForSelector(".row.filled");
@@ -637,10 +637,33 @@ const root = path.resolve(__dirname, "..");
       await secondPanel.locator("#targetName").textContent(),
       "Postal code",
     );
+    await web.locator('#react-name').fill('');
+    await web.locator('#react-name').evaluate(e => e.setAttribute('autocomplete','given-name'));
+    await secondWeb.bringToFront();
+    await panel.evaluate(() => document.getElementById('fillAutomatically').click());
+    await panel.waitForFunction(() => document.getElementById('fillResult').textContent.includes('fields filled'));
+    assert.equal(await web.locator('#react-name').inputValue(), 'Ada Lovelace');
+    assert.equal(await secondWeb.locator('#full-name').inputValue(), '');
     await worker.evaluate(
       (windowId) => chrome.windows.remove(windowId),
       secondWindow.id,
     );
+    await require('./bulk.cjs')({
+      panel: source => panel.evaluate(source => new Function('return (async()=>{' + source + '})()')(), source),
+      page: source => web.evaluate(source => new Function(source)(), source),
+      navigate: async file => {await web.goto('http://localhost:8765/tests/' + file); await web.waitForTimeout(150);}
+    });
+    // Exercise the actual one-click button with no selected field and active search.
+    await web.goto("http://localhost:8765/tests/bulk.html"); await web.waitForTimeout(150);
+    await require('./reconnect.cjs')(source => panel.evaluate(source => new Function('return (async()=>{' + source + '})()')(), source));
+    await web.reload(); await web.waitForTimeout(150);
+    await require('./background-response.cjs')(source => panel.evaluate(source => new Function('return (async()=>{' + source + '})()')(), source));
+    await panel.locator('#search').fill('no saved matches');
+    await panel.evaluate(() => document.getElementById('fillAutomatically').click());
+    await panel.waitForFunction(() => document.getElementById('fillResult').textContent.includes('fields filled'));
+    assert.equal(await web.locator('#first').inputValue(), 'Ada Lovelace');
+    assert.equal(await web.locator('#email').inputValue(), 'existing@example.org');
+    await panel.locator('#search').fill('');
     await panel.emulateMedia({ colorScheme: "dark" });
     await panel.setViewportSize({ width: 320, height: 800 });
     assert.equal(
@@ -742,6 +765,12 @@ const root = path.resolve(__dirname, "..");
           0,
         );
         await panel.locator("#categories").evaluate((e) => (e.scrollTop = 0));
+        assert.equal(await panel.locator('#fillAutomatically').evaluate(e=>e.getBoundingClientRect().height),44);
+        assert.equal(await panel.locator('#fillAutomatically').getAttribute('aria-describedby'),'fillResult');
+        await panel.locator('#fillAutomatically').focus();
+        assert.equal(await panel.locator('#fillAutomatically').evaluate(e=>document.activeElement===e),true);
+        fs.mkdirSync(path.join(root,'release/screenshots'),{recursive:true});
+        await panel.screenshot({path:path.join(root,'release/screenshots',`chrome-${theme}-${width}.png`)});
         await panel.screenshot({
           path: path.join(os.tmpdir(), `formpilot-${theme}-${width}.png`),
         });

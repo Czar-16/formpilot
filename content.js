@@ -1,6 +1,16 @@
 (() => {
+  // On-demand injection must not add duplicate listeners to live documents.
+  if (globalThis.formpilotContentLoaded) return;
+  globalThis.formpilotContentLoaded = true;
   const token = crypto.randomUUID();
   let target;
+  const candidates = new Map();
+  const register = () =>
+    formpilotAPI.runtime
+      .sendMessage({ kind: "register-document", token })
+      .catch(() => {});
+  register();
+  window.addEventListener("pageshow", register);
   const compatible = (e) =>
     e instanceof Element &&
     e.matches(
@@ -20,7 +30,9 @@
       .trim();
   }
   window.addEventListener("pagehide", () => {
-    formpilotAPI.runtime.sendMessage({ kind: "clear-owner", token }).catch(() => {});
+    formpilotAPI.runtime
+      .sendMessage({ kind: "unregister-document", token })
+      .catch(() => {});
   });
   function descriptor(e) {
     const root = e.getRootNode();
@@ -114,109 +126,223 @@
       })
     );
   }
-  formpilotAPI.runtime.onMessage.addListener((m, sender, reply) => {
-    if (m.kind !== "transfer" || m.token !== token) return;
-    try {
-      if (!target)
-        throw Error("Click on a form field first, then press the arrow");
-      if (!target.isConnected)
-        throw Error("That field was removed. Click a form field again.");
-      if (target.matches(":disabled") || target.readOnly)
-        throw Error("This field is disabled or read-only.");
-      let e = target;
-      if (m.file) {
-        const bytes = Uint8Array.from(atob(m.file.data), (c) =>
-            c.charCodeAt(0),
-          ),
-          file = new File([bytes], m.file.name, {
-            type: m.file.type,
-            lastModified: m.file.lastModified,
-          });
-        if (!(e instanceof HTMLInputElement && e.type === "file")) {
-          const candidates = [
-            ...(e.form?.querySelectorAll("input[type=file]") || []),
-          ].filter((i) => !i.matches(":disabled") && accepts(i, file));
-          if (candidates.length !== 1)
-            throw Error("Click the upload control, then press Attach.");
-          e = candidates[0];
-        }
-        if (!accepts(e, file))
-          throw Error("This upload control does not accept this file type.");
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        e.files = dt.files;
-        events(e);
-      } else if (e instanceof HTMLSelectElement) {
-        const options = [...e.options].filter(
-          (o) => !o.disabled && !o.parentElement.disabled,
+  function visible(e) {
+    if (
+      !e?.isConnected ||
+      e.ownerDocument !== document ||
+      e.matches(":disabled") ||
+      e.readOnly
+    )
+      return false;
+    for (
+      let node = e;
+      node instanceof Element;
+      node = node.parentElement || node.getRootNode().host
+    ) {
+      const style = getComputedStyle(node);
+      if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.visibility === "collapse" ||
+        node.hasAttribute("hidden") ||
+        node.hasAttribute("inert")
+      )
+        return false;
+    }
+    return e.getClientRects().length > 0;
+  }
+  function supported(e) {
+    return (
+      compatible(e) &&
+      (e.matches("input,textarea,select") || e.isContentEditable) &&
+      !(
+        e instanceof HTMLInputElement &&
+        [
+          "hidden",
+          "password",
+          "checkbox",
+          "radio",
+          "button",
+          "submit",
+          "reset",
+          "image",
+          "color",
+          "range",
+        ].includes(e.type)
+      ) &&
+      !(
+        e.isContentEditable &&
+        e.parentElement?.closest(
+          '[contenteditable]:not([contenteditable="false"])',
+        )
+      )
+    );
+  }
+  const empty = (e) =>
+    e.type === "file"
+      ? !e.files.length
+      : e instanceof HTMLSelectElement
+        ? [...e.selectedOptions].every((o) => o.value === "")
+        : !(e.isContentEditable ? e.textContent : e.value).trim();
+  const owningForm = (e) => e.form || e.closest("form");
+  function scan(root, found = [], frames = []) {
+    for (const e of root.querySelectorAll("*")) {
+      if (supported(e) && visible(e)) found.push(e);
+      if (e.matches("iframe,frame")) frames.push(e);
+      if (e.shadowRoot) scan(e.shadowRoot, found, frames);
+    }
+    return found;
+  }
+  function write(e, m, automatic = false) {
+    if (automatic && (!supported(e) || !visible(e) || !empty(e)))
+      throw Error("Field changed or is no longer empty and writable.");
+    if (!e) throw Error("Click on a form field first, then press the arrow");
+    if (!e.isConnected)
+      throw Error("That field was removed. Click a form field again.");
+    if (e.matches(":disabled") || e.readOnly)
+      throw Error("This field is disabled or read-only.");
+
+    if (m.file) {
+      const bytes = Uint8Array.from(atob(m.file.data), (c) => c.charCodeAt(0)),
+        file = new File([bytes], m.file.name, {
+          type: m.file.type,
+          lastModified: m.file.lastModified,
+        });
+      if (!(e instanceof HTMLInputElement && e.type === "file")) {
+        if (automatic) throw Error("Choose a résumé upload control.");
+        const candidates = [
+          ...(e.form?.querySelectorAll("input[type=file]") || []),
+        ].filter((i) => !i.matches(":disabled") && accepts(i, file));
+        if (candidates.length !== 1)
+          throw Error("Click the upload control, then press Attach.");
+        e = candidates[0];
+      }
+      if (!accepts(e, file))
+        throw Error("This upload control does not accept this file type.");
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      e.files = dt.files;
+      events(e);
+    } else if (e instanceof HTMLSelectElement) {
+      const options = [...e.options].filter(
+        (o) => !o.disabled && !o.parentElement.disabled,
+      );
+      const option =
+        options.find((o) => o.value === m.value || o.text === m.value) ||
+        options.find(
+          (o) =>
+            o.value.toLowerCase() === m.value.toLowerCase() ||
+            o.text.toLowerCase() === m.value.toLowerCase(),
         );
-        const option =
-          options.find((o) => o.value === m.value || o.text === m.value) ||
-          options.find(
-            (o) =>
-              o.value.toLowerCase() === m.value.toLowerCase() ||
-              o.text.toLowerCase() === m.value.toLowerCase(),
-          );
-        if (!option) throw Error("No enabled option matches this value.");
-        e.value = option.value;
-        events(e, true);
-      } else if (e.isContentEditable) {
-        e.focus();
-        const range = document.createRange();
-        range.selectNodeContents(e);
-        const sel = getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-        if (!document.execCommand("insertText", false, m.value)) {
-          e.textContent = m.value;
-          events(e);
-        } else e.dispatchEvent(new Event("change", { bubbles: true }));
-        e.dispatchEvent(new Event("blur", { bubbles: true }));
-      } else if (
-        e instanceof HTMLTextAreaElement ||
-        (e instanceof HTMLInputElement &&
-          ![
-            "file",
-            "checkbox",
-            "radio",
-            "button",
-            "submit",
-            "reset",
-            "image",
-            "hidden",
-            "color",
-            "range",
-          ].includes(e.type))
+      if (!option) throw Error("No enabled option matches this value.");
+      e.value = option.value;
+      events(e, true);
+    } else if (e.isContentEditable) {
+      e.focus();
+      const range = document.createRange();
+      range.selectNodeContents(e);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      if (!document.execCommand("insertText", false, m.value)) {
+        e.textContent = m.value;
+        events(e);
+      } else e.dispatchEvent(new Event("change", { bubbles: true }));
+      e.dispatchEvent(new Event("blur", { bubbles: true }));
+    } else if (
+      e instanceof HTMLTextAreaElement ||
+      (e instanceof HTMLInputElement &&
+        ![
+          "file",
+          "checkbox",
+          "radio",
+          "button",
+          "submit",
+          "reset",
+          "image",
+          "hidden",
+          "color",
+          "range",
+        ].includes(e.type))
+    ) {
+      const proto =
+        e instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+      const previous = e.value;
+      setter.call(e, m.value);
+      if (
+        e instanceof HTMLInputElement &&
+        ["number", "date", "datetime-local", "month", "time", "week"].includes(
+          e.type,
+        ) &&
+        m.value &&
+        !e.value
       ) {
-        const proto =
-          e instanceof HTMLTextAreaElement
-            ? HTMLTextAreaElement.prototype
-            : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-        const previous = e.value;
-        setter.call(e, m.value);
+        setter.call(e, previous);
+        throw Error(
+          `This ${e.type} field cannot accept that value. Save a value in the field’s required format.`,
+        );
+      }
+      events(e, true);
+    } else throw Error("This field cannot receive text.");
+    highlight(e);
+    return { ok: true, requestId: m.requestId };
+  }
+  formpilotAPI.runtime.onMessage.addListener((m, sender, reply) => {
+    if (m.kind === "refresh-document") {
+      formpilotAPI.runtime
+        .sendMessage({ kind: "register-document", token })
+        .then((result) => reply(result), (error) => reply({ error: error.message }));
+      return true;
+    }
+    if (
+      !["transfer", "scan-fields", "batch-fill"].includes(m.kind) ||
+      m.token !== token
+    )
+      return;
+    try {
+      if (m.kind === "scan-fields") {
         if (
-          e instanceof HTMLInputElement &&
-          [
-            "number",
-            "date",
-            "datetime-local",
-            "month",
-            "time",
-            "week",
-          ].includes(e.type) &&
-          m.value &&
-          !e.value
-        ) {
-          setter.call(e, previous);
+          m.selected &&
+          (!target?.isConnected || target.ownerDocument !== document)
+        )
           throw Error(
-            `This ${e.type} field cannot accept that value. Save a value in the field’s required format.`,
+            "Selected field is stale. Click a field again or refresh the page.",
           );
-        }
-        events(e, true);
-      } else throw Error("This field cannot receive text.");
-      highlight(e);
-      reply({ ok: true, requestId: m.requestId });
+        candidates.clear();
+        const frames = [];
+        const selectedForm = m.selected ? owningForm(target) : null;
+        const fields = scan(document, [], frames)
+          .filter((e) => !selectedForm || owningForm(e) === selectedForm)
+          .map((e) => {
+            const id = crypto.randomUUID();
+            candidates.set(id, e);
+            return {
+              id,
+              descriptor: descriptor(e),
+              empty: empty(e),
+              accept: e.type === "file" ? e.accept : undefined,
+            };
+          });
+        reply({
+          fields,
+          frameCount: m.selected ? 0 : frames.length,
+        });
+      } else if (m.kind === "batch-fill") {
+        const results = m.entries.map((entry) => {
+          try {
+            const e = candidates.get(entry.id);
+            if (!e) throw Error("Field expired. Fill again.");
+            write(e, entry, true);
+            return { id: entry.id, ok: true };
+          } catch (error) {
+            return { id: entry.id, error: error.message };
+          }
+        });
+        reply({ results });
+      } else reply(write(target, m));
     } catch (error) {
       reply({ error: error.message, requestId: m.requestId });
     }

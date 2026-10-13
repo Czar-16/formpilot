@@ -1,4 +1,5 @@
 const paths = {
+  refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1a8 8 0 0 1 13.3 3.4M4.6 14.5a8 8 0 0 0 13.3 3.4"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',

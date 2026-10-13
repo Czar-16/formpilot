@@ -57,6 +57,31 @@
       </div>
       <span id="targetStatus" class="target-status">No field selected</span>
     </div>
+    <div class="automatic-fill">
+      <div class="fill-actions">
+      <button
+        id="fillAutomatically"
+        class="primary"
+        type="button"
+        aria-describedby="fillResult"
+      >
+        Fill automatically
+      </button>
+      <button
+        id="refreshExtension"
+        class="refresh-extension"
+        type="button"
+        aria-label="Refresh extension"
+        title="Reload FormPilot. Reopen the panel after refreshing."
+      ></button>
+      </div>
+      <p
+        id="fillResult"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      ></p>
+    </div>
     <main id="categories" aria-label="Saved items"></main>
     <footer>
       <span id="lockIcon"></span>All data is stored only on this device
@@ -101,7 +126,7 @@
     <dialog id="resetDialog" aria-labelledby="resetTitle">
       <h2 id="resetTitle">Start fresh with FormPilot</h2>
       <p>
-        Replace all saved profiles and files with the new fourteen empty items.
+        Replace all saved profiles and files with the new fifteen empty items.
         Export a backup to keep your current data.
       </p>
       <div class="sheet-actions">

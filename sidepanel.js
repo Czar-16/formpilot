@@ -1,4 +1,4 @@
-import { bestMatch, convertLegacy } from "./model.js";
+import { bestMatch, convertLegacy, bulkMatch, migrateNames } from "./model.js";
 import { icon } from "./icons.js";
 import { getFile, putFile, deleteFile, encode, decode } from "./db.js";
 const $ = (id) => document.getElementById(id),
@@ -67,8 +67,37 @@ for (const [id, name] of [
   ["searchIcon", "search"],
   ["targetIcon", "crosshair"],
   ["lockIcon", "lock"],
+  ["refreshExtension", "refresh"],
 ])
   $(id).append(icon(name));
+$("refreshExtension").onclick = async () => {
+  const button = $("refreshExtension");
+  button.disabled = true;
+  try {
+    await queue;
+    await formpilotAPI.runtime.reload();
+  } catch (e) {
+    $("fillResult").textContent = "Could not refresh FormPilot. " + e.message;
+    button.disabled = false;
+  }
+};
+// A newly opened panel can outlive, or be newer than, its background script.
+// Missing responses must stop filling rather than discard a selected target.
+async function backgroundRequest(message) {
+  const reconnect = "FormPilot could not connect to its background service. Reload or reinstall the extension, refresh the webpage, and reopen the panel.";
+  let result;
+  try {
+    result = await formpilotAPI.runtime.sendMessage(message);
+  } catch {
+    throw Error(reconnect);
+  }
+  if (!result || typeof result !== "object" || Array.isArray(result))
+    throw Error(reconnect);
+  if (result.error) throw Error(result.error);
+  if (message.kind === "get-documents" && !Array.isArray(result.documents))
+    throw Error(reconnect);
+  return result;
+}
 async function trackTarget(reset = false) {
   const revision = ++targetRevision;
   if (panelWindowId === undefined)
@@ -81,7 +110,10 @@ async function trackTarget(reset = false) {
   if (reset || tab?.id !== currentTabId) filled.clear();
   currentTabId = tab?.id;
   const result = tab?.id
-    ? await formpilotAPI.runtime.sendMessage({ kind: "get-owner", tabId: tab.id })
+    ? await backgroundRequest({
+        kind: "get-owner",
+        tabId: tab.id,
+      })
     : {};
   if (revision !== targetRevision) return;
   owner = result.owner;
@@ -143,9 +175,17 @@ function fresh(name = "Default") {
     collapsed: false,
     entries: [],
   }));
-  const p = { id: uid(), name, categories, items: [], groups: [] };
+  const p = {
+    id: uid(),
+    name,
+    categories,
+    items: [],
+    groups: [],
+    nameFieldsVersion: 1,
+  };
   for (const [label, cat, type] of [
-    ["Full name", "Personal", "text"],
+    ["First name", "Personal", "text"],
+    ["Last name", "Personal", "text"],
     ["Email", "Personal", "text"],
     ["Phone", "Personal", "text"],
     ["Street address", "Address", "text"],
@@ -542,12 +582,10 @@ async function transfer(item) {
     throw Error(
       "Browser internal pages and add-on stores cannot be filled. Open a webpage and click a field.",
     );
-  const ownership = await formpilotAPI.runtime.sendMessage({
+  const ownership = await backgroundRequest({
     kind: "get-owner",
     tabId: tab.id,
   });
-  if (ownership.error)
-    throw Error("Focus storage unavailable: " + ownership.error);
   const owner = ownership.owner;
   if (!owner) throw Error("Click on a form field first, then press the arrow");
   const message = {
@@ -589,6 +627,176 @@ async function transfer(item) {
   }
   toast("Filled");
 }
+
+const route = (doc) =>
+  !formpilotAPI.sidebarAction && doc.documentId
+    ? { documentId: doc.documentId }
+    : { frameId: doc.frameId };
+$("fillAutomatically").onclick = async () => {
+  const button = $("fillAutomatically"),
+    status = $("fillResult");
+  button.disabled = true;
+  button.textContent = "Filling…";
+  const counts = { fields: 0, files: 0, unmatched: 0, failures: 0 };
+  const explanations = new Set();
+  try {
+    const profile = structuredClone(active());
+    const [tab] = await formpilotAPI.tabs.query({
+      active: true,
+      windowId: panelWindowId,
+    });
+    if (!tab?.id) throw Error("Open a webpage first.");
+    const ownership = await backgroundRequest({
+      kind: "get-owner",
+      tabId: tab.id,
+    });
+    const selected = ownership.owner;
+    let registry = await backgroundRequest({
+      kind: "get-documents",
+      tabId: tab.id,
+    });
+    if (!selected && !registry.documents.length) {
+      // Open pages can predate installation/reload, or lose their registration
+      // when a website navigates without replacing its document.
+      try {
+        const result = await formpilotAPI.tabs.sendMessage(tab.id, {
+          kind: "refresh-document",
+        });
+        if (!result?.ok) throw Error("Document is disconnected.");
+      } catch {
+        if (!formpilotAPI.scripting)
+          throw Error("Refresh the webpage to reconnect FormPilot, then try Fill automatically again.");
+        try {
+          await formpilotAPI.scripting.executeScript({
+            target: { tabId: tab.id, allFrames: true },
+            files: ["browser-api.js", "content.js"],
+          });
+          await formpilotAPI.tabs.sendMessage(tab.id, { kind: "refresh-document" });
+        } catch {
+          throw Error("Could not connect to this webpage. Open FormPilot using its toolbar icon to allow access, or refresh the webpage. Check website access in extension settings; browser internal pages and add-on stores cannot be filled.");
+        }
+      }
+      registry = await backgroundRequest({ kind: "get-documents", tabId: tab.id });
+    }
+    const documents = selected ? [selected] : registry.documents;
+    if (!documents?.length)
+      throw Error(
+        "No accessible form found. Refresh the webpage and check website access in extension settings.",
+      );
+    let frameCount = 0;
+    for (const doc of documents) {
+      try {
+        const scan = await formpilotAPI.tabs.sendMessage(
+          tab.id,
+          {
+            kind: "scan-fields",
+            token: doc.token,
+            selected: Boolean(selected),
+          },
+          route(doc),
+        );
+        if (!scan || scan.error)
+          throw Error(
+            scan?.error ||
+              "Document changed. Click a field again or refresh the page.",
+          );
+        frameCount += scan.frameCount || 0;
+        const entries = [],
+          matches = new Map();
+        for (const field of scan.fields.filter((f) => f.empty)) {
+          const match = bulkMatch(profile, field.descriptor);
+          if (!match) {
+            counts.unmatched++;
+            continue;
+          }
+          try {
+            const entry = { id: field.id };
+            if (match.type === "file") {
+              const file = await getFile(match.value);
+              if (!file)
+                throw Error("Saved résumé is missing. Upload it again.");
+              const accepts =
+                !field.accept ||
+                field.accept.split(",").some((r) => {
+                  r = r.trim().toLowerCase();
+                  return r.startsWith(".")
+                    ? file.name.toLowerCase().endsWith(r)
+                    : r.endsWith("/*")
+                      ? file.type.toLowerCase().startsWith(r.slice(0, -1))
+                      : file.type.toLowerCase() === r;
+                });
+              if (!accepts) {
+                counts.unmatched++;
+                continue;
+              }
+              entry.file = {
+                data: await encode(file.blob),
+                name: file.name,
+                type: file.type,
+                lastModified: file.lastModified,
+              };
+            } else entry.value = match.value;
+            entries.push(entry);
+            matches.set(field.id, match);
+          } catch (e) {
+            counts.failures++;
+            explanations.add(e.message);
+          }
+        }
+        if (entries.length) {
+          const result = await formpilotAPI.tabs.sendMessage(
+            tab.id,
+            { kind: "batch-fill", token: doc.token, entries },
+            route(doc),
+          );
+          if (!result?.results) {
+            counts.failures += entries.length;
+            explanations.add(
+              "Document changed before filling. Click a field again or refresh the page.",
+            );
+            continue;
+          }
+          for (const resultEntry of result.results) {
+            if (resultEntry.ok) {
+              const match = matches.get(resultEntry.id);
+              counts[match.type === "file" ? "files" : "fields"]++;
+              if (tab.id === currentTabId && profile.id === active().id)
+                match.ids.forEach((id) => filled.add(id));
+            } else {
+              counts.failures++;
+              explanations.add(resultEntry.error);
+            }
+          }
+        }
+      } catch (e) {
+        counts.failures++;
+        explanations.add(
+          selected
+            ? "Selected document is unavailable. Click a field again or refresh the page. " +
+                e.message
+            : "A frame was inaccessible. Check website access or refresh the page.",
+        );
+      }
+    }
+    if (!selected && frameCount > documents.length - 1)
+      explanations.add(
+        "Some frames were inaccessible; only accessible documents were processed.",
+      );
+    status.textContent =
+      `${counts.fields} fields filled · ${counts.files} files attached · ${counts.unmatched} unmatched · ${counts.failures} failures. ` +
+      (!counts.fields && !counts.files
+        ? "Nothing could be filled: fields may already contain values or lack a confident saved match. "
+        : "") +
+      [...explanations].join(" ") +
+      " Click again for newly revealed fields or the next step.";
+    render();
+  } catch (e) {
+    status.textContent = e.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Fill automatically";
+  }
+};
 
 function download(blob, name) {
   const url = URL.createObjectURL(blob),
@@ -1175,6 +1383,7 @@ function validate(data, withFiles = true) {
   for (const p of data.profiles) {
     add(p.id);
     string(p.name);
+    if (p.nameFieldsVersion !== undefined && p.nameFieldsVersion !== 1) fail();
     if (
       !Array.isArray(p.categories) ||
       !Array.isArray(p.items) ||
@@ -1388,7 +1597,9 @@ try {
   if (saved) {
     validate(saved, false);
     state = saved;
-    applyTheme();
+    if (saved.profiles.some((p) => p.nameFieldsVersion !== 1))
+      await commit(migrateNames(saved));
+    else applyTheme();
   } else {
     const p = fresh();
     await commit({

@@ -49,3 +49,82 @@ assert.equal(orderedItems(p)[0].id, "6");
 console.log(
   "PASS: exact/containment/token matching, aliases, zero matches, saved-order ties and lossless legacy conversion",
 );
+
+const { bulkMatch, migrateNames } = await import("../model.js");
+const profile = structuredClone(p);
+profile.items.forEach((i) => (i.value = i.label));
+profile.items.push(
+  {
+    id: "first",
+    label: "Given name",
+    value: "Ada",
+    type: "text",
+    category: "c",
+  },
+  {
+    id: "last",
+    label: "Surname",
+    value: "Lovelace",
+    type: "text",
+    category: "c",
+  },
+);
+profile.categories[0].entries.push(
+  { kind: "item", id: "first" },
+  { kind: "item", id: "last" },
+);
+assert.equal(bulkMatch(profile, { autocomplete: "given-name" }).value, "Ada");
+assert.equal(
+  bulkMatch(profile, { autocomplete: "family-name" }).value,
+  "Lovelace",
+);
+assert.equal(bulkMatch(profile, { label: "GitHub" }), null);
+assert.equal(bulkMatch(profile, { label: "Phone interview" }), null);
+assert.equal(
+  bulkMatch(profile, { label: "Your full name here" }).value,
+  "Full name",
+);
+profile.items.find((i) => i.label === "Full name").value = "";
+assert.equal(
+  bulkMatch(profile, { autocomplete: "name" }).value,
+  "Ada Lovelace",
+);
+profile.groups.push({ id: "project", fields: ["first"] });
+assert.equal(bulkMatch(profile, { autocomplete: "given-name" }), null);
+let id = 0;
+const migration = migrateNames(legacy, () => `new-${++id}`);
+assert.equal(migration.profiles[0].items.length, items.length + 2);
+assert.deepEqual(
+  migration.profiles[0].items.slice(0, items.length),
+  legacy.profiles[0].items,
+);
+assert.deepEqual(migrateNames(migration), migration);
+migration.profiles[0].items.pop();
+assert.deepEqual(migrateNames(migration), migration);
+console.log(
+  "PASS bulk name aliases, combined names, confidence, ties, project exclusion and idempotent name migration",
+);
+
+const resumeProfile = {
+  groups: [],
+  items: [{ id: "r", label: "Resume", type: "file", value: "file-id" }],
+  categories: [{ entries: [{ kind: "item", id: "r" }] }],
+};
+assert.equal(
+  bulkMatch(resumeProfile, {
+    inputType: "file",
+    label: "Upload your résumé file",
+  }).id,
+  "r",
+);
+assert.equal(
+  bulkMatch(resumeProfile, {
+    inputType: "file",
+    label: "Resume or cover letter",
+  }),
+  null,
+);
+assert.equal(
+  bulkMatch(resumeProfile, { inputType: "file", label: "Supporting document" }),
+  null,
+);

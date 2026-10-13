@@ -30,7 +30,7 @@ const root = path.resolve(__dirname, '..');
       builder = builder.setFirefoxService(new firefox.ServiceBuilder(process.env.GECKODRIVER_PATH));
     driver = await builder.build();
     await driver.manage().setTimeouts({ script: 15000 });
-    await driver.installAddon(path.join(root, 'dist/formpilot-firefox-2.1.0.zip'), true);
+    await driver.installAddon(path.join(root, 'dist/formpilot-firefox-2.2.0.zip'), true);
     await driver.setContext('chrome');
     const uuid = await driver.executeScript(`return JSON.parse(Services.prefs.getStringPref('extensions.webextensions.uuids'))['formpilot@extensions.local'];`);
     const widgetId = 'formpilot_extensions_local-browser-action';
@@ -62,12 +62,12 @@ const root = path.resolve(__dirname, '..');
     const waitRows = () => driver.wait(async () => (await driver.findElements(By.css('.row'))).length > 0,10000);
     const saved = () => asyncJS("return (await browser.storage.local.get('formpilot')).formpilot");
     await waitRows(); console.log('PASS Firefox panel defaults');
-    assert.equal((await driver.findElements(By.css('.row'))).length,14);
-    await click('[aria-label="Edit Full name"]');
+    assert.equal((await driver.findElements(By.css('.row'))).length,15);
+    await click('[aria-label="Edit First name"]');
     await driver.findElement(By.css('#dialogFields textarea, #dialogFields input[name="value"]')).sendKeys('Alex Example');
     await click('#editForm button[type="submit"]');
     await driver.wait(async () => !(await js("return document.getElementById('editor').open")),10000);
-    assert.equal((await saved()).profiles[0].items.find(i=>i.label==='Full name').value,'Alex Example');
+    assert.equal((await saved()).profiles[0].items.find(i=>i.label==='First name').value,'Alex Example');
     // Actual profile duplication preserves values and independent file records.
     await hiddenClick('duplicateProfile');
     await click('#editForm button[type="submit"]');
@@ -79,7 +79,7 @@ const root = path.resolve(__dirname, '..');
     await driver.findElement(By.css('#dialogFields input[type="file"]')).sendKeys(resumePath);
     await click('#editForm button[type="submit"]');
     await driver.wait(async () => !(await js("return document.getElementById('editor').open")),10000);
-    await click('[aria-label="Copy Full name"]');
+    await click('[aria-label="Copy First name"]');
     assert.equal(await asyncJS('return await navigator.clipboard.readText()'),'Alex Example');
     // Export by intercepting only the final local download, leaving serialization intact.
     await js(`window.downloads=[]; window.originalAnchorClick=HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click=function(){window.downloads.push({href:this.href,name:this.download})};`);
@@ -174,6 +174,37 @@ const root = path.resolve(__dirname, '..');
     assert.notEqual(firstOwner.owner.token,secondOwner.owner.token);
     assert.equal((await asyncJS(`return await browser.runtime.sendMessage({kind:'get-owner',tabId:arguments[0]})`,stale.tabId)).owner.token,firstOwner.owner.token);
     await asyncJS('await browser.windows.remove(arguments[0]); return true;',win.id);
+    await require('./bulk.cjs')({
+      panel: async source => {await driver.switchTo().window(panel); return asyncJS(source);},
+      page: async source => {await driver.switchTo().window(fixture); return js(source);},
+      navigate: async file => {await driver.switchTo().window(fixture); await driver.get('http://localhost:8765/tests/' + file); await new Promise(r=>setTimeout(r,150));}
+    });
+    await driver.switchTo().window(panel);
+    await driver.switchTo().window(fixture);
+    await driver.get('http://localhost:8765/tests/bulk.html');
+    await new Promise(r=>setTimeout(r,150));
+    await driver.switchTo().window(panel);
+    await asyncJS('await browser.tabs.update(window.bulkTest.tabId,{active:true}); return true;');
+    await require('./reconnect.cjs')(source => asyncJS(source));
+    await driver.switchTo().window(fixture);
+    await driver.navigate().refresh();
+    await new Promise(r=>setTimeout(r,150));
+    await driver.switchTo().window(panel);
+    await require('./background-response.cjs')(source => asyncJS(source));
+    const automaticStatus = await asyncJS(`
+      document.getElementById('search').value='no matching saved cards';
+      document.getElementById('search').dispatchEvent(new Event('input'));
+      await browser.tabs.update(window.bulkTest.tabId,{active:true});
+      document.getElementById('fillAutomatically').click();
+      for(let i=0;i<100 && document.getElementById('fillAutomatically').disabled;i++) await new Promise(r=>setTimeout(r,50));
+      return document.getElementById('fillResult').textContent;
+    `);
+    assert.match(automaticStatus,/fields filled/);
+    await driver.switchTo().window(fixture);
+    assert.equal(await js("return document.getElementById('first').value"),'Alex Example');
+    assert.equal(await js("return document.getElementById('email').value"),'existing@example.org');
+    await driver.switchTo().window(panel);
+    await js("document.getElementById('search').value='';document.getElementById('search').dispatchEvent(new Event('input'))");
     // Capture the actual extension page at sidebar widths, using only dummy data.
     fs.mkdirSync(path.join(root,'release/screenshots'),{recursive:true});
     for(const theme of ['light','dark']) {
@@ -184,6 +215,8 @@ const root = path.resolve(__dirname, '..');
         await driver.findElement(By.id('search')).sendKeys('Example');
         const metrics=await js(`const i=document.getElementById('search'),b=i.closest('.search-box'),r=i.getBoundingClientRect(),s=b.getBoundingClientRect();return {height:s.height,outline:getComputedStyle(i).outlineStyle,ring:getComputedStyle(b).outlineWidth,padding:getComputedStyle(i).padding,fits:r.top>=s.top&&r.bottom<=s.bottom&&r.right<=s.right,rows:document.querySelectorAll('.row').length}`);
         assert.equal(await js('return document.body.scrollWidth<=arguments[0]',width),true);
+        assert.equal(await js("return document.getElementById('fillAutomatically').getBoundingClientRect().height"),44);
+        assert.equal(await js("return document.getElementById('fillAutomatically').getAttribute('aria-describedby')"),'fillResult');
         assert.equal(metrics.height,44);assert.equal(metrics.outline,'none');assert.equal(metrics.ring,'2px');assert.equal(metrics.padding,'0px');assert.equal(metrics.fits,true);assert.ok(metrics.rows>0);
         fs.writeFileSync(path.join(root,`release/screenshots/firefox-${theme}-${width}-focused.png`),await driver.findElement(By.css('body')).takeScreenshot(), 'base64');
         await driver.findElement(By.id('search')).sendKeys(' nonexistent-93827');
