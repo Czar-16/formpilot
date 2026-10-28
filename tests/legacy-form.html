@@ -1,0 +1,31 @@
+<!doctype html>
+<html><body>
+<!-- Representative markup from RoboForm's legacy shopping-cart test. -->
+<form>
+  <div>
+    <span><b>First Name</b></span><br>
+    <input name="02frstname">
+    <br><span><b>Address 1</b></span><br><input name="10address1">
+    <br><span><b>City</b></span><br><input name="13adr_city">
+    <br><span>Company Name</span><br><input name="05_company">
+  </div>
+  <div>
+    <span><b>Last Name</b></span><br><input name="04lastname">
+    <br><span>Address 2</span><br><input name="10address2">
+    <br><span><b>State</b></span><br>
+    <select name="14adrstate"><option value="">Select State</option><option value="CA">CALIFORNIA</option></select>
+    <br><span>Company Phone</span><br>
+    (<input name="21workphon_ac" maxlength="3">)<input name="21workphon_pr" maxlength="3">
+  </div>
+  <div>
+    <span><b>Postal Code</b></span><br><input name="16addr_zip">
+    <br><span><b>Enter your Email Address</b></span><br><input name="24emailadr">
+    <br><span>Choose A Password</span><br><input type="password">
+  </div>
+  <!-- Explicit semantics win, and captions cannot bleed into adjacent fields. -->
+  <div><span>City</span><input name="explicit" aria-label="Unrelated"><input name="unlabelled"></div>
+  <div><label for="elsewhere">First Name</label><input name="wrong-label"></div>
+  <div><span>City</span><div><input name="nested"></div><input name="after-group"></div>
+  <div><span>First Name</span><input name="preserved" value="Existing"></div>
+</form>
+</body></html>

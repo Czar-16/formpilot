@@ -5,9 +5,14 @@
   const token = crypto.randomUUID();
   let target;
   const candidates = new Map();
+  // Reloading the extension invalidates scripts in existing tabs. Chrome can
+  // throw synchronously here; an async wrapper lets callers handle that failure
+  // with the same rejection handlers used for messaging errors.
+  async function sendMessage(message) {
+    return formpilotAPI.runtime.sendMessage(message);
+  }
   const register = () =>
-    formpilotAPI.runtime
-      .sendMessage({ kind: "register-document", token })
+    sendMessage({ kind: "register-document", token })
       .catch(() => {});
   register();
   window.addEventListener("pageshow", register);
@@ -30,10 +35,30 @@
       .trim();
   }
   window.addEventListener("pagehide", () => {
-    formpilotAPI.runtime
-      .sendMessage({ kind: "unregister-document", token })
+    sendMessage({ kind: "unregister-document", token })
       .catch(() => {});
   });
+  function nearbyLabel(e) {
+    // Legacy forms often put a short caption and <br> before each control.
+    // Stay within the same parent and never cross another field or field group.
+    for (let node = e.previousSibling; node; node = node.previousSibling) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        if (
+          compatible(node) ||
+          node.querySelector("input,textarea,select,[contenteditable]") ||
+          !node.matches("span,b,strong,em,i,small,br,label")
+        )
+          return "";
+        if (node.matches("label[for]") && node.htmlFor !== e.id) return "";
+      }
+      const text = (node.nodeType === Node.TEXT_NODE
+        ? node.textContent
+        : labelText(node)).replace(/\s+/g, " ").trim();
+      if (!/[\p{L}\p{N}]/u.test(text)) continue;
+      return text.length <= 120 ? text : "";
+    }
+    return "";
+  }
   function descriptor(e) {
     const root = e.getRootNode();
     const labelled = (e.getAttribute("aria-labelledby") || "")
@@ -41,11 +66,13 @@
       .map((id) => labelText(root.getElementById?.(id)))
       .join(" ")
       .trim();
-    return {
-      label: [...(e.labels || [])]
+    const label = [...(e.labels || [])]
         .map((l) => labelText(l))
         .join(" ")
-        .slice(0, 500),
+        .trim();
+    return {
+      label: (label || (!labelled && !e.getAttribute("aria-label") &&
+        !e.getAttribute("placeholder") ? nearbyLabel(e) : "")).slice(0, 500),
       accessibleName: (labelled || e.getAttribute("aria-label") || "").slice(
         0,
         500,
@@ -67,8 +94,7 @@
     }
     if (compatible(e)) {
       target = e;
-      formpilotAPI.runtime
-        .sendMessage({ kind: "focus-owner", token, descriptor: descriptor(e) })
+      sendMessage({ kind: "focus-owner", token, descriptor: descriptor(e) })
         .catch(() => {});
     }
   }
@@ -292,8 +318,7 @@
   }
   formpilotAPI.runtime.onMessage.addListener((m, sender, reply) => {
     if (m.kind === "refresh-document") {
-      formpilotAPI.runtime
-        .sendMessage({ kind: "register-document", token })
+      sendMessage({ kind: "register-document", token })
         .then((result) => reply(result), (error) => reply({ error: error.message }));
       return true;
     }

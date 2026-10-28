@@ -65,7 +65,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "formpilot@extensions.local",
+      "id": "formpilot-07bcfdc3-cf5f-4a6b-87e2-1fa3fede1565@extensions.local",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [

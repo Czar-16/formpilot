@@ -129,6 +129,9 @@ Object.assign(aliases, {
   "mobile phone": "phone",
   address: "street address",
   "address line 1": "street address",
+  "address 1": "street address",
+  "address line2": "address line 2",
+  "address 2": "address line 2",
   "zip postal code": "pin code",
   "personal website": "website",
   "linkedin url": "linkedin",
@@ -145,6 +148,7 @@ const semanticTokens = new Set([
   "tel",
   "street-address",
   "address-line1",
+  "address-line2",
   "address-level2",
   "address-level1",
   "postal-code",
@@ -166,7 +170,8 @@ export function bulkMatch(profile, descriptor) {
     .split(/\s+/)
     .find((t) => semanticTokens.has(t));
   const terms = ["label", "accessibleName", "placeholder", "name", "id"]
-    .map((k) => canonical(descriptor[k]))
+    .map((k) => canonical(normalize(descriptor[k])
+      .split(" ").filter((word) => !stop.has(word)).join(" ")))
     .filter(Boolean);
   if (descriptor.inputType === "file") {
     const uploadWords = new Set([

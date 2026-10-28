@@ -80,7 +80,7 @@ assert.deepEqual(firefox.background.scripts, ["browser-api.js", "background.js"]
 assert.deepEqual(firefox.content_scripts[0].js, ["browser-api.js", "content.js"]);
 assert.equal(firefox.sidebar_action.default_panel, "sidepanel.html");
 assert.deepEqual(firefox.browser_specific_settings.gecko, {
-  id: "formpilot@extensions.local", strict_min_version: "140.0",
+  id: "formpilot-07bcfdc3-cf5f-4a6b-87e2-1fa3fede1565@extensions.local", strict_min_version: "140.0",
   data_collection_permissions: {required: ["none"]}
 });
 assert.ok(read("sidepanel.html").toString().indexOf('src="browser-api.js"') < read("sidepanel.html").toString().indexOf('src="theme.js"'));

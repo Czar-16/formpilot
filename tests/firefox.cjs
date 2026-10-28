@@ -32,8 +32,8 @@ const root = path.resolve(__dirname, '..');
     await driver.manage().setTimeouts({ script: 15000 });
     await driver.installAddon(path.join(root, 'dist/formpilot-firefox-2.2.0.zip'), true);
     await driver.setContext('chrome');
-    const uuid = await driver.executeScript(`return JSON.parse(Services.prefs.getStringPref('extensions.webextensions.uuids'))['formpilot@extensions.local'];`);
-    const widgetId = 'formpilot_extensions_local-browser-action';
+    const uuid = await driver.executeScript(`return JSON.parse(Services.prefs.getStringPref('extensions.webextensions.uuids'))['formpilot-07bcfdc3-cf5f-4a6b-87e2-1fa3fede1565@extensions.local'];`);
+    const widgetId = 'formpilot-07bcfdc3-cf5f-4a6b-87e2-1fa3fede1565_extensions_local-browser-action';
     // Place the real toolbar action in the navigation bar, then click it.
     await driver.executeScript(`window.CustomizableUI.addWidgetToArea(arguments[0], window.CustomizableUI.AREA_NAVBAR);`, widgetId);
     await driver.findElement(By.id(widgetId)).click();
