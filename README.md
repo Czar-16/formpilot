@@ -1,14 +1,29 @@
-# FormPilot <img src="assets/brand/formpilot-logo.png" alt="FormPilot logo" width="48" height="48">
+<p align="center">
+  <img src="assets/brand/formpilot-logo.png" alt="FormPilot logo" width="96" height="96">
+</p>
 
-> Your details and documents, ready to fill forms from your browser's side panel.
+<h1 align="center">FormPilot</h1>
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue.svg) ![Chrome](https://img.shields.io/badge/Chrome-116%2B-4285F4.svg) ![Firefox](https://img.shields.io/badge/Firefox-140%2B-FF7139.svg) ![Storage](https://img.shields.io/badge/storage-local_only-4F46E5.svg)
+<p align="center">
+  Your details and documents, ready to fill forms from your browser's side panel.
+</p>
 
-Use separate profiles for personal details, work, or job applications. Your profiles and files stay on your device—no account, analytics, or cloud sync.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Version 2.2.0">
+  <img src="https://img.shields.io/badge/Chrome-116%2B-4285F4.svg" alt="Chrome 116 or later">
+  <img src="https://img.shields.io/badge/Firefox-140%2B-FF7139.svg" alt="Firefox 140 or later">
+  <img src="https://img.shields.io/badge/storage-local_only-4F46E5.svg" alt="Local storage only">
+</p>
 
-**[Install for Firefox & Zen](https://addons.mozilla.org/en-US/firefox/addon/formpilot-by-czar16/)** · **[Download for Chrome](https://github.com/Czar-16/formpilot/releases/latest)**
+<p align="center">
+  <strong><a href="https://addons.mozilla.org/en-US/firefox/addon/formpilot-by-czar16/">Install for Firefox &amp; Zen</a></strong>
+  &nbsp;·&nbsp;
+  <strong><a href="https://github.com/Czar-16/formpilot/releases/latest">Download for Chrome</a></strong>
+</p>
 
 ---
+
+Use separate profiles for personal details, work, or job applications. Your profiles and files stay on your device—no account, analytics, or cloud sync.
 
 ## Features
 
